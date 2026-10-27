@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>MEDROMUS</title>
+		<link rel="stylesheet" href="style.css">
+	</head>
+	<body>
+		<div id="main-menu">
+			<div class="game-info">
+				<p><b>[ Информация ]</b></p>
+				<p>--- --- ---</p>
+				<p>Soon</p>
+			</div>
+			<div class="game-info2">
+				<p><b>[ Пару слов о ]</b></p>
+				<p>--- --- ---</p>
+				<p>Идея: GrenkaDev</p>
+				<p>Воплощение: GrenkaDev, Deepseek.ai (помощь в коде)</p>
+        <p>(Yep, russian text)</p>
+			</div>
+			<div class="menu-container">
+			<pre class="medr">
+╔════════════════════════════════════════════════════════════════════════╗
+║███╗   ███╗███████╗██████╗ ██████╗  ██████╗ ███╗   ███╗██╗   ██╗███████╗║
+║████╗ ████║██╔════╝██╔══██╗██╔══██╗██╔═══██╗████╗ ████║██║   ██║██╔════╝║
+║██╔████╔██║█████╗  ██║  ██║██████╔╝██║   ██║██╔████╔██║██║   ██║███████╗║
+║██║╚██╔╝██║██╔══╝  ██║  ██║██╔══██╗██║   ██║██║╚██╔╝██║██║   ██║╚════██║║
+║██║ ╚═╝ ██║███████╗██████╔╝██║  ██║╚██████╔╝██║ ╚═╝ ██║╚██████╔╝███████║║
+║╚═╝     ╚═╝╚══════╝╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝ ╚═════╝ ╚══════╝║
+╚════════════════════════════════════════════════════════════════════════╝
+			</pre>
+			
+			<div class="menu-buttons">
+				<button id="play-btn" onclick="preStart()">Играть</button>
+				<button id="load-btn" onclick="load()">Загрузить</button>
+				<button onclick="toggleLang()">Ru / En</button>
+				<button onclick="startGame()">dev button</button>
+			</div>
+			<div class="info">
+				GrenkaDev. 2026©. NOT Beta 1.0<br>27.10.2026
+			</div>
+		</div></div>
+		<!--27 oct: I'm adding caves to the game, please wait-->
+		<div id="world-setting" style="display: none;">
+			<h2 style="color: #888; font-family: monospace;">Создание мира (настройки)</h2>
+			<div>
+				<label style="color: #aaa; font-family: monospace;">Размер мира (50 - 2000):
+					<input type="number" id="world-size" value="500" min="50" max="2000" style="font-family: monospace;">
+				</label><br>
+				<label style="color: #aaa; font-family: monospace;">Сид мира:
+					<input type="text" id="world-seed" style="font-family: monospace;">
+				</label>
+			</div>
+			<div class="menu-buttons">
+				<button id="play-btn" onclick="startGame()">Играть</button>
+				<button id="back-btn" onclick="backToMenu()">Назад</button>
+			</div>
+		</div>
+  </body>
+</html>
