@@ -10,14 +10,19 @@
 			<div class="game-info">
 				<p><b>[ Информация ]</b></p>
 				<p>--- --- ---</p>
-				<p>Soon</p>
+				<p>Движгаться: WASD/Стрелочки</p>
+				<p>Действие: E/Пробел</p>
+				<p>--- --- ---</p>
+				<p>(Перевод на английский всё ещё хромает (не забудь выбрать русский))</p>
+				<p>--- --- ---</p>
+				<p>Игра находится в бета версии</p>
+				<p>(Сложность навряд-ли будет уменьшаться с новыми обновлениями. Казуальщики - закрывайте)</p>
 			</div>
 			<div class="game-info2">
 				<p><b>[ Пару слов о ]</b></p>
 				<p>--- --- ---</p>
 				<p>Идея: GrenkaDev</p>
-				<p>Воплощение: GrenkaDev, Deepseek.ai (помощь в коде)</p>
-        <p>(Yep, russian text)</p>
+				<p>Воплощение: GrenkaDev, Deepseek.ai (помощь в коде, далее планирую без него, а то заебал)</p>
 			</div>
 			<div class="menu-container">
 			<pre class="medr">
@@ -35,13 +40,13 @@
 				<button id="play-btn" onclick="preStart()">Играть</button>
 				<button id="load-btn" onclick="load()">Загрузить</button>
 				<button onclick="toggleLang()">Ru / En</button>
-				<button onclick="startGame()">dev button</button>
+				<!--<button onclick="startGame()">dev button</button>-->
 			</div>
 			<div class="info">
-				GrenkaDev. 2026©. NOT Beta 1.0<br>27.10.2026
+				GrenkaDev. 2026©. Beta 1.0<br>02.11.2026
 			</div>
 		</div></div>
-		<!--27 oct: I'm adding caves to the game, please wait-->
+		
 		<div id="world-setting" style="display: none;">
 			<h2 style="color: #888; font-family: monospace;">Создание мира (настройки)</h2>
 			<div>
@@ -57,5 +62,957 @@
 				<button id="back-btn" onclick="backToMenu()">Назад</button>
 			</div>
 		</div>
-  </body>
+		
+		<div id="view"></div>
+		<div id="sidebar">
+			<div id="stats"></div>
+			<div id="log"></div>
+			<div id="invent"></div>
+			<div id="craft-block"></div>
+			<button id="save-btn" onclick="save()" style="font-family: monospace;">Сохранить и выйти</button>
+		</div>
+		
+		<script>
+			function hashCode(str) {
+				let hash = 0;
+				for (let i =0; i < str.length; i++) {
+					hash = ((hash << 5) - hash) + str.charCodeAt(i);
+					hash |= 0;
+				}
+				return hash;
+			}
+			let seed = 0;
+			function random() {
+				let x = Math.sin(seed++) * 10000;
+				return x - Math.floor(x);
+			}
+			
+			function preStart() {
+				document.getElementById("main-menu").style.display = "none";
+				document.getElementById("world-setting").style.display = "block";
+			}
+			
+			function backToMenu() {
+				document.getElementById("main-menu").style.display = "block";
+				document.getElementById("world-setting").style.display = "none";
+			}
+			
+			function toggleLang() {
+				currentLang = (currentLang === "en") ? "ru" : "en";
+				updateLang();
+			}
+			
+			function updateLang() {
+				let t = TRANSLATIONS[currentLang];
+				for (let key in t.items) {
+					ITEM_NAMES[key] = t.items[key];
+				}
+				let playBtn = document.getElementById("play-btn");
+				if (playBtn) playBtn.innerHTML = t.play;
+				let loadBtn = document.getElementById("load-btn");
+				if (loadBtn) loadBtn.innerHTML = t.load;
+				let saveBtn = document.getElementById("save-btn");
+				if (saveBtn) saveBtn.innerHTML = t.ui.save;
+				
+				if (map && map.length > 0) update();
+			}
+			
+			function startGame() {
+				let sizeInput = document.getElementById("world-size").value;
+				let seedInput = document.getElementById("world-seed").value;
+				
+				MAP_SIZE = parseInt(sizeInput) || 500;
+				pX = Math.floor(MAP_SIZE/2);
+				pY = Math.floor(MAP_SIZE/2);
+				
+				dimensions = {
+					overworld: {map: [], size: MAP_SIZE, px: pX, py: pY, name: "Surface"},
+					cave: {map: [], size: 150, px: 75, py: 75, name: "Cave"}
+				};
+				currentDim = "overworld";
+				
+				if (seedInput.trim() === "") {
+					seed = Math.floor(Math.random() * 1000000);
+				} else seed = hashCode(seedInput);
+				seed = Math.abs(seed);
+				
+				inventory = {};
+				monsters = [];
+				map.length = 0;
+				
+				// --- MAP GENERATION ---
+				let centerX = Math.floor(MAP_SIZE/2);
+				let centerY = Math.floor(MAP_SIZE/2);
+				
+				let biomePoints = [];
+				let biomeTypes = ["Plains", "Desert", "WhiteWater", "Stone", "Ashlands"];
+				
+				for (let i=0; i<30; i++) {
+					biomePoints.push({
+						x: Math.floor(random() * MAP_SIZE), y: Math.floor(random() * MAP_SIZE), type: biomeTypes[Math.floor(random() * biomeTypes.length)]
+					});
+				}
+				for (let y = 0; y < MAP_SIZE; y++) {
+					dimensions.overworld.map[y] = [];
+					for (let x = 0; x < MAP_SIZE; x++) {
+						let rand = random();
+						if (x >= centerX-25 && x <= centerX+25 && y >= centerY-25 && y <= centerY+25) {
+							if (rand < 0.02) dimensions.overworld.map[y][x] = "T"; //tree
+							else if (rand < 0.03) dimensions.overworld.map[y][x] = "R"; //rock
+							else if (rand < 0.13) dimensions.overworld.map[y][x] = "≈"; //water
+							else if (rand < 0.11) dimensions.overworld.map[y][x] = "P"; //potato
+							else dimensions.overworld.map[y][x] = ".";
+							continue;
+						}
+						let closestBiome = "Plains";
+						let minDist = 999999;
+						for (let bp of biomePoints) {
+							let dist = Math.pow(x-bp.x, 2)+Math.pow(y-bp.y, 2);
+							if (dist < minDist) {
+								minDist = dist;
+								closestBiome = bp.type;
+							}
+						}
+						if (closestBiome === "Desert") {
+							if (rand < 0.03) dimensions.overworld.map[y][x] = "#"; //cactus
+							else dimensions.overworld.map[y][x] = "d";
+						} else if (closestBiome === "WhiteWater") {
+							if (rand < 0.70) dimensions.overworld.map[y][x] = "s";
+							else dimensions.overworld.map[y][x] = ".";
+						} else if (closestBiome === "Stone") {
+							if (rand < 0.25) dimensions.overworld.map[y][x] = "R";
+							else if (rand < 0.27) dimensions.overworld.map[y][x] = "h";
+							//else if (rand < 0.50) dimensions.overworld.map[y][x] = "v";
+							else dimensions.overworld.map[y][x] = ".";
+						} else if (closestBiome === "Ashlands") {
+							if (rand < 0.05) dimensions.overworld.map[y][x] = "B"; //obsidian
+							else dimensions.overworld.map[y][x] = "a";
+						} else {
+							if (rand < 0.02) dimensions.overworld.map[y][x] = "T"; //tree
+							else if (rand < 0.03) dimensions.overworld.map[y][x] = "R"; //rock
+							else if (rand < 0.13) dimensions.overworld.map[y][x] = "≈"; //water
+							else if (rand < 0.11) dimensions.overworld.map[y][x] = "P"; //potato
+							else dimensions.overworld.map[y][x] = ".";
+						}
+					}
+				}
+				
+				dimensions.overworld.map[pY][pX] = "."; //суша
+				dimensions.overworld.map[pY-5][pX+2] = "W"; //workbench
+				
+				// --- MONSTERS GENERATION ---
+				for (let i = 0; i < 40; i++) {
+					let mX = Math.floor(random() * MAP_SIZE);
+					let mY = Math.floor(random() * MAP_SIZE);
+					if (dimensions.overworld.map[mY][mX] === ".") monsters.push({x: mX, y: mY, type: "M", hp: 40}); //deadman
+					let gX = Math.floor(random() * MAP_SIZE);
+					let gY = Math.floor(random() * MAP_SIZE);
+					if (dimensions.overworld.map[gY][gX] === ".") monsters.push({x: gX, y: gY, type: "G", hp: 60}); //golem
+					let sX = Math.floor(random() * MAP_SIZE);
+					let sY = Math.floor(random() * MAP_SIZE);
+					if (dimensions.overworld.map[sY][sX] === ".") monsters.push({x: sX, y: sY, type: "S", hp: 30}); //snake
+					let ogX = Math.floor(random() * MAP_SIZE);
+					let ogY = Math.floor(random() * MAP_SIZE);
+					if (dimensions.overworld.map[ogY][ogX] === ".") monsters.push({x: ogX, y: ogY, type: "g", hp: 90}); //obsidian golem
+					let ocX = Math.floor(random() * MAP_SIZE);
+					let ocY = Math.floor(random() * MAP_SIZE);
+					if (dimensions.overworld.map[ocY][ocX] === ".") monsters.push({x: ocX, y: ocY, type: "C", hp: 30}); //crab
+				}
+				
+				document.getElementById("main-menu").style.display = "none";
+				document.getElementById("world-setting").style.display = "none";
+				document.getElementById("view").style.display = "block";
+				document.getElementById("sidebar").style.display = "flex";
+				map = dimensions.overworld.map;
+				update();
+			}
+			
+			function travelTo(dimensionName) {
+				dimensions[currentDim].px = pX;
+				dimensions[currentDim].py = pY;
+				dimensions[currentDim].map = map;
+				currentDim = dimensionName;
+				if (currentDim === "cave" && dimensions.cave.map.length === 0) {
+					generateCave();
+				}
+				
+				pX = dimensions[currentDim].px;
+				pY = dimensions[currentDim].py;
+				MAP_SIZE = dimensions[currentDim].size;
+				map = dimensions[currentDim].map;
+				update();
+			}
+			
+			function generateCave() {
+				let dim = dimensions.cave;
+				dim.map = [];
+				dim.px = Math.floor(dim.size/2);
+				dim.py = Math.floor(dim.size/2);
+				for (let y=0; y<dim.size; y++) {
+					dim.map[y] = [];
+					for (let x=0; x<dim.size; x++) {
+						let rand = random();
+						if (x === 0 || y === 0 || x === dim.size-1 || y === dim.size-1) {
+							dim.map[y][x] = "R";
+						} else if (rand<0.20) {
+							dim.map[y][x] = "R";
+						} else if (rand<0.25) {
+							dim.map[y][x] = "B";
+						} else {
+							dim.map[y][x] = ".";
+						}
+					}
+				}
+				dim.map[dim.py][dim.px] = ".";
+				dim.map[dim.py-1][dim.px] = "^";
+			}
+			
+			console.log("12. All working\n Coordinates: Y, X. Daaaa, i ya huy znaet pochemu");
+			let hp = 100, hunger = 100, thirst = 100, temperature = 10, stamina = 100;
+			let equipped = null;
+
+			let MAP_SIZE = 500;
+			const VIEW_SIZE = 20;
+			let pX = 250, pY = 250;
+			let map = [];
+			let dimensions = {};
+			let currentDim = "overworld";
+			let inventory = {}; //инвентарь
+			let lastDx = 0, lastDy = 1; //куда смотрит игрок (по умолчанию вниз)
+			
+			// --- Translation ---
+			const TRANSLATIONS = {
+				ru: {
+					play: "Играть",
+					load: "Загрузить",
+					back: "Назад",
+					create: "Создание мира",
+					size: "Размер мира (50 - 2000):",
+					seed: "Сид мира:",
+					info: "",
+					info2: "",
+					items: {
+						"T": "Дерево",
+						"R": "Камень",
+						"P": "Картофель",
+						"[": "Каменный топор",
+						"/": "Каменная кирка",
+						"|": "Каменный меч",
+						"#": "Кактус",
+						"B": "Обсидиан",
+						"[": "Железный топор",
+						"/": "Железная кирка",
+						"|": "Железный меч",
+						"[": "Обсидиановый топор",
+						"/": "Обсидиановая кирка",
+						"|": "Обсидиановый меч",
+						"I": "Железо",
+						"f": "Волокно",
+						"~": "Нить",
+						"r": "Верёвка"
+					},
+					ui: {
+						inv: "Инвентарь:",
+						hand: "В руках: ",
+						eat: "[ Съесть ]",
+						equip: "[ Взять/надеть ]",
+						drop: "[ Выкинуть ]",
+						unequip: "[ Убрать/снять ]",
+						save: "Сохранить и выйти",
+						craft: "[ Верстак (W) ]",
+						recipes: "Рецепты:",
+						no_craft: "(Подойдите ближе к верстаку (W))"
+					},
+					logs: {
+						welcome: "* Medromus приветствует вас...",
+						ate: "* Вы съели ",
+						equip: "* Вы взяли в руки ",
+						unequip: "* Вы убрали ",
+						craft: "* Вы скрафтили ",
+						hit: "* Вы ударили ",
+						kill: "* Вы убили ",
+						drop: "* Вы выбросили ",
+						pick: "* Вы взяли ",
+						attack: "атаковал вас",
+						hunger: "* Кто-то забыл поесть/попить...",
+						stamina: "* Кто-то устал...",
+						no_hand: "* Слот занят",
+						cave1: "* Вы спустились в шахту",
+						cave2: "* Вы вышли из шахты",
+					},
+					monsters: {
+						M: "Мертвец",
+						G: "Голем",
+						S: "Змея",
+						g: "Обсидиановый голем",
+					}
+				},
+				en: {
+					play: "Play",
+					load: "Load",
+					back: "Back",
+					create: "Creating the world",
+					size: "World size (50 - 2000):",
+					seed: "World seed:",
+					info: "",
+					info2: "",
+					items: {
+						"T": "Wood",
+						"R": "Rock",
+						"P": "Potato",
+						"[": "Stone axe",
+						"/": "Stone picaxe",
+						"|": "Stone sword",
+						"#": "Cactus",
+						"B": "Obsidian",
+						"1": "Iron axe",
+						"2": "Iron picaxe",
+						"3": "Iron sword",
+						"4": "Obsidian axe",
+						"5": "Obsidian picaxe",
+						"6": "Obsidian sword",
+						"I": "Iron",
+						"f": "Fiber",
+						"~": "String",
+						"r": "Rope"
+					},
+					ui: {
+						inv: "Inventory:",
+						hand: "In hands: ",
+						eat: "[ Eat ]",
+						equip: "[ Equip ]",
+						drop: "[ Drop ]",
+						unequip: "[ Unequip ]",
+						save: "Save and exit",
+						craft: "[ Workbench (W) ]",
+						recipes: "Recipes:",
+						no_craft: "(Come closer to the workbench (W))"
+					},
+					logs: {
+						welcome: "* Medromus welcomes you...",
+						ate: "* You ate ",
+						equip: "* You equip ",
+						unequip: "* You unequip ",
+						craft: "* You craft ",
+						hit: "* You hit ",
+						kill: "* You kill ",
+						drop: "* You drop ",
+						pick: "* You pick ",
+						attack: "attacked you",
+						hunger: "* Someone forgot to eat/drink...",
+						stamina: "* Someone is tired...",
+						no_hand: "* The slot is occupied",
+						cave1: "* You went down the cave",
+						cave2: "* You came out of the cave",
+					},
+					monsters: {
+						M: "Deadman",
+						G: "Golem",
+						S: "Snake",
+						g: "Obsidian Golem",
+						C: "Crab"
+					}
+				}
+			};
+			let currentLang = "en";
+			const ITEM_NAMES = TRANSLATIONS[currentLang].items;
+			const RECIPES = {
+				"Axe": {result: "[", amount: 1, req: {"T":4,"R":6}},
+				"Picaxe": {result: "/", amount: 1, req: {"T":4,"R":6}},
+				"Sword": {result: "|", amount: 1, req: {"T":4,"R":6}},
+				//"Axe": {result: "[", amount: 1, req: {"T":4,"R":6,"~":4}},
+				//"Picaxe": {result: "/", amount: 1, req: {"T":4,"R":6,"~":4}},
+				//"Sword": {result: "|", amount: 1, req: {"T":4,"R":6,"~":4}},
+				"IronAxe": {result: "1", amount: 1, req: {"T":4,"I":8,"~":4}},
+				"IronPicaxe": {result: "2", amount: 1, req: {"T":4,"I":8,"~":4}},
+				"IronSword": {result: "3", amount: 1, req: {"T":4,"I":8,"~":4}},
+				"ObsidianAxe": {result: "4", amount: 1, req: {"I":4,"B":10,"~":4}},
+				"ObsidianPicaxe": {result: "5", amount: 1, req: {"I":4,"B":10,"~":4}},
+				"ObsidianSword": {result: "6", amount: 1, req: {"I":4,"B":10,"~":4}},
+				"String": {result: "~", amount: 1, req: {"f":4}},
+				"Rope": {result: "r", amount: 1, req: {"~":4}}
+				
+			};
+			const WEAPON_DMG = {
+				"|": 2,
+				"/": 2,
+				"[": 2,
+				"3": 3,
+				"1": 3,
+				"2": 3,
+				"6": 4,
+				"4": 4,
+				"5": 4
+			};
+			
+			let gameDay = 1;
+			let gameHour = 6;
+			let timeOfDay = "Morning";
+			let stepCounter = 0;
+			let durabilityMap = {};
+			let logs = [TRANSLATIONS[currentLang].logs.welcome];
+			
+			let monsters = [];
+			
+			
+			
+			function dropItem(item) {
+				if (!inventory[item] || inventory[item] <= 0) return;
+				let dropped = false;
+				for (let dY = -1; dY <= 1; dY++) {
+					for (let dX = -1; dX <= 1; dX++) {
+						let targetX = pX+dX;
+						let targetY = pY+dY;
+						
+						if (targetX >= 0 && targetX < MAP_SIZE && targetY >= 0 && targetY < MAP_SIZE){
+							if (map[targetY][targetX] == "."){
+							inventory[item]--;
+							map[targetY][targetX] = item;
+							
+							if (inventory[item] === 0) delete inventory[item];
+							dropped = true;
+							break;
+						}
+					}
+				}
+				if (dropped) break;
+			}}
+			update();
+			
+			function equipItem(item) {
+				let t = TRANSLATIONS[currentLang];
+				if (!inventory[item] || inventory[item] <= 0) return;
+				if (equipped) {
+					addLog(t.logs.no_hand);
+					update();
+					return;
+				}
+				
+				inventory[item]--;
+				if (inventory[item] === 0) delete inventory[item];
+				equipped = item;
+				addLog(t.logs.equip+ITEM_NAMES[item]);
+				update();
+			}
+			
+			function unequipItem(item) {
+				let t = TRANSLATIONS[currentLang];
+				if (!equipped) return;
+				if (!inventory[equipped]) inventory[equipped] = 0;
+				inventory[equipped]++;
+				addLog(t.logs.unequip+ITEM_NAMES[equipped]);
+				equipped = null;
+				update();
+			}
+			
+			function eatItem(item) {
+				let t = TRANSLATIONS[currentLang];
+				if (!inventory[item] || inventory[item] <= 0) return;
+				
+				if (item === "P") {
+					inventory[item]--;
+					hunger = Math.min(100, hunger + 3);
+					stamina = Math.min(100, stamina + 1);
+					
+					if (inventory[item] === 0) delete inventory[item];
+					addLog("* Вы съели картофель");
+				}
+				update();
+			}
+			
+			function addLog(text) {
+				logs.unshift(text);
+				logs.length = Math.min(logs.length, 5);
+				document.getElementById("log").innerHTML = logs.join("\n");
+			}
+			
+			function craftItem(recipeKey) {
+				let t = TRANSLATIONS[currentLang];
+				let recipe = RECIPES[recipeKey];
+				if (!recipe) return;
+				
+				for (let item in recipe.req) {
+					if ((inventory[item] || 0) < recipe.req[item]) return;
+				}
+				
+				for (let item in recipe.req) {
+					inventory[item] -= recipe.req[item];
+					if (inventory[item] === 0) delete inventory[item];
+				}
+				
+				let res = recipe.result;
+				if (!inventory[res]) inventory[res] = 0;
+				inventory[res] += recipe.amount;
+				addLog(t.logs.craft+ITEM_NAMES[res]);
+				update();
+			}
+			
+			function update() { // --- FUNCTION UPDATE --- --- FUNCTION UPDATE --- --- FUNCTION UPDATE --- --- FUNCTION UPDATE ---
+				if (!map || map.length === 0) return;
+				let t = TRANSLATIONS[currentLang];
+				let out = "";
+				let startX = Math.max(0, Math.min(MAP_SIZE - VIEW_SIZE, pX - Math.floor(VIEW_SIZE / 2)));
+				let startY = Math.max(0, Math.min(MAP_SIZE - VIEW_SIZE, pY - Math.floor(VIEW_SIZE / 2)));
+	
+				for (let y = startY; y < startY + VIEW_SIZE; y++) {
+					for (let x = startX; x < startX + VIEW_SIZE; x++) {
+						
+						let dX = x-pX;
+						if (dX < 0) dX = -dX;
+						let dY = y-pY;
+						if (dY < 0) dY = -dY;
+						
+						let dist = dX;
+						if (dY > dX) dist = dY;
+						
+						let lightRadius = 20;
+						if (timeOfDay === "Evening") lightRadius = 7;
+						else if (timeOfDay === "Night") lightRadius = 4;
+						if (dist > lightRadius) {
+							out += '<span class="dark">.</span>';
+						}
+						else if (x === pX && y === pY) {
+						out += '<span class="player">@</span>';
+						} else {
+						let tile = map[y][x];
+						if (currentDim === "cave") {
+							if (tile === ".") out += '<span class="rock">.</span>';
+							else if (tile === "R") out += '<span class="rock">R</span>';
+							else if (tile === "^") out += '<span class="workbench">^</span>';
+						}
+						else {
+						if (tile === ".") out += '<span class="grass">.</span>';
+						else if (tile === "T") out += '<span class="tree">T</span>';
+						else if (tile === "R") out += '<span class="rock">R</span>';
+						else if (tile === "≈") out += '<span class="water">≈</span>';
+						else if (tile === "P") out += '<span class="potato">P</span>';
+						else if (tile === "W") out += '<span class="workbench">W</span>';
+						else if (tile === "[") out += '<span class="weapon">[</span>';
+						else if (tile === "/") out += '<span class="weapon">/</span>';
+						else if (tile === "|") out += '<span class="weapon">|</span>';
+						else if (tile === "#") out += '<span class="grass">#</span>';
+						else if (tile === "B") out += '<span class="obsidian">B</span>';
+						else if (tile === "d") out += '<span class="sand">.</span>';
+						else if (tile === "h") out += '<span class="weapon">R</span>';
+						else if (tile === "s") out += '<span class="whitesea">≈</span>';
+						else if (tile === "a") out += '<span class="ash">.</span>';
+						else if (tile === "v") out += '<span class="workbench">0</span>';
+						
+						else if (tile === "1") out += '<span class="weapon">[</span>'; // --- ЗАГОТОВКА ПОД ЖЕЛЕЗНЫЕ И ОБСИДИАНОВЫЕ ИНСТРУМЕНТЫ
+						else if (tile === "2") out += '<span class="weapon">/</span>';
+						else if (tile === "3") out += '<span class="weapon">|</span>';
+						
+						else if (tile === "4") out += '<span class="weapon">[</span>';
+						else if (tile === "5") out += '<span class="weapon">/</span>';
+						else if (tile === "6") out += '<span class="weapon">|</span>';
+						}
+						
+						let monsterInCell = monsters.find(m => m.x === x && m.y === y);
+						if (monsterInCell && (timeOfDay !== "Night" || dist <= lightRadius)) {
+							if (monsterInCell.type === "M") out += '<span class="deadman">M</span>';
+							if (monsterInCell.type === "G") out += '<span class="golem">G</span>';
+							if (monsterInCell.type === "S") out += '<span class="snake">S</span>';
+							if (monsterInCell.type === "g") out += '<span class="obs-golem">G</span>';
+							if (monsterInCell.type === "C") out += '<span class="potato">C</span>';
+						}
+						}
+					}
+					out += "\n";
+				}
+			let tempText = temperature + "/10"
+			document.getElementById("view").innerHTML = out;
+			let statsText = "HP: "+hp+" | Hunger: "+hunger+" | Thirst: "+thirst+"\nStamina: "+stamina+" | Temp.: "+tempText+"\nPos.: X: "+pX+", Y: "+pY+"\nDay: "+gameDay+" | Time: "+gameHour+" | Now: "+timeOfDay+""; //PLAYER STATISTICS
+			document.getElementById("stats").innerHTML = statsText;
+			//let t = TRANSLATIONS[currentLang];
+			let invText = "<b>"+t.ui.inv+"</b>\n";
+			let idx = 1;
+			for (let item in inventory) {
+				if (inventory[item] > 0) {
+					let name = ITEM_NAMES[item] || item;
+					invText += idx + ". " + name + " x" + inventory[item];
+					
+					if (item === "P") invText += " <span class='eat-btn' onclick='eatItem(\"" + item + "\")'>"+t.ui.eat+"</span>";
+					if (item === "[" || item === "/" || item === "|" || item === "1" || item === "2" || item === "3" || item === "4" || item === "5" || item === "6") {
+						invText += "<span class='eat-btn' onclick='equipItem(\"" +item+ "\")'>"+t.ui.equip+"</span>";
+					}
+					
+					invText += " <span class='drop-btn' onclick='dropItem(\"" + item + "\")'>"+t.ui.drop+"</span>\n";
+					idx++;
+				}
+			}
+			if (equipped) {
+				invText += "\n<span class='weapon'>"+t.ui.hand+"</span>" +ITEM_NAMES[equipped]+ "<span class='drop-btn' onclick='unequipItem()'>"+t.ui.unequip+"</span>\n";
+			}
+			document.getElementById("invent").innerHTML = invText;
+			
+			let nearWorkbench = false;
+			for (let dY = -1; dY <= 1; dY++) {
+				for (let dX = -1; dX <= 1; dX++) {
+					let checkX = pX + dX;
+					let checkY = pY + dY;
+					if (checkX >= 0 && checkX < MAP_SIZE && checkY >= 0 && checkY < MAP_SIZE) {
+						if (map[checkY][checkX] === "W") nearWorkbench = true;
+					}
+				}
+			}
+			
+			//CRAFTING	CRAFTING	CRAFTING	CRAFTING	CRAFTING
+			let craftText = "";
+			if (nearWorkbench) {
+				craftText += ""+t.ui.craft+"<br>"+t.ui.recipes+"<br>";
+				
+				for (let key in RECIPES) {
+					let recipe = RECIPES[key];
+					let canCraft = true;
+					let reqText = [];
+					
+					for (let item in recipe.req) {
+						let need = recipe.req[item];
+						let have = inventory[item] || 0;
+						if (have < need) canCraft = false;
+						reqText.push((ITEM_NAMES[item] || item)+ " x" +need);
+					}
+					let reqStr = "(" +reqText.join(", ")+ ")";
+					let itemName = ITEM_NAMES[recipe.result] || recipe.result;
+					
+					if (canCraft) {
+						craftText += `<span class='craft-btn' onclick='craftItem("${key}")'>[${itemName}]</span> ${reqStr}<br>`;
+					} else {
+						craftText += `<s>[${itemName}]</s> ${reqStr}<br>`;
+					}
+				}
+				craftText += "</div>\n";
+			} else {
+				craftText = t.ui.no_craft;
+			}
+			document.getElementById("craft-block").innerHTML = craftText;
+			
+			} //end of function update
+			
+			function move(dX,dY) {
+				let t = TRANSLATIONS[currentLang];
+				if (stamina <= 0) {
+					addLog(t.logs.stamina);
+					return;
+				}
+				lastDx = dX;
+				lastDy = dY;
+				let nX = pX + dX;
+				let nY = pY + dY;
+				if (nX >= 0 && nX < MAP_SIZE && nY >= 0 && nY < MAP_SIZE) {
+					let nextTile = map[nY][nX];
+					if (nextTile !== "T" &&  nextTile !== "R" && nextTile !== "≈" && nextTile !== "W") {
+						pX = nX;
+						pY = nY;
+						
+						stepCounter++;
+						
+						if (stepCounter % 5 === 0) {
+							if (hunger > 0) hunger -= 1;
+						}
+						else if (stepCounter % 4 === 0) {
+							if (thirst > 0) thirst -= 2;
+						}
+						else if (stepCounter % 2 === 0) {
+							if (stamina > 0) stamina = Math.max(0, stamina-1);
+						}
+						
+						if (hunger <= 0 || thirst <= 0) {
+							if (hp > 0) hp -= 1;
+							addLog(t.logs.hunger);
+						}
+					}
+				}
+			}
+
+			window.addEventListener("keydown", (e) => {
+				let t = TRANSLATIONS[currentLang];
+				let k = e.key.toLowerCase();
+				if (k === "w" || k === "ц" || k === "arrowup") move(0,-1);
+				if (k === "s" || k === "ы" || k === "arrowdown") move(0,1);
+				if (k === "a" || k === "ф" || k === "arrowleft") move(-1,0);
+				if (k === "d" || k === "в" || k === "arrowright") move(1,0);
+				
+				// --- CONSOLE	CONSOLE	CONSOLE	CONSOLE	CONSOLE	CONSOLE ---
+				if (k === "`" || k === "ё") {
+					let cmd = prompt("Enter command");
+					if (cmd) {
+						let parts = cmd.trim().split(" ");
+						if (parts[0] === "give" && parts[1] && parts[2]) {
+							let item = parts[1];
+							let amount = parseInt(parts[2]);
+							
+							if (!isNaN(amount) && amount >0) {
+								if (!inventory[item]) inventory[item] = 0;
+								inventory[item] += amount;
+								addLog("[CONSOLE]: выдано " +(ITEM_NAMES[item] || item)+ " x" +amount);
+								update();
+							} else {
+								alert("Unknown command\n(give NAME AMOUNT)");
+							}
+						}
+						if (parts[0] === "help") {
+							alert("All commands:\nhelp\ngive NAME AMOUNT\nseed\n)");
+						}
+						if (parts[0] === "seed") {
+							alert("seed: " +seed);
+						}
+					}
+					return;
+				}
+				
+				//take item
+				if (k === " " || k === "e" || k === "у"){
+					let targetX = pX + lastDx;
+					let targetY = pY + lastDy;
+					
+					// --- FIGHT WITH MONSTERS ---
+					let targetMonster = monsters.find(m => m.x === targetX && m.y === targetY);
+					
+					if (targetMonster) {
+						let damage = WEAPON_DMG[equipped] || 1;
+						targetMonster.hp -= damage;
+						let mName = t.monsters[targetMonster.type] || "Monster";
+						addLog(t.logs.hit+mName+". -"+damage);
+						
+						if (targetMonster.hp <= 0) {
+							addLog(t.logs.kill+mName);
+							monsters = monsters.filter(m => m !== targetMonster);
+						}
+						update();
+						return;
+					}
+					// --- END FIGHT ---
+					
+					if (targetX >= 0 && targetX < MAP_SIZE && targetY >= 0 && targetY < MAP_SIZE){
+						let tile = map[targetY][targetX];
+						
+						// --- Taking dropped items ---
+						let droppedItem = ["[", "/", "|"];
+						if (droppedItem.includes(tile)) {
+							if (!inventory[tile]) inventory[tile] = 0;
+							inventory[tile]++;
+							map[targetY][targetX] = ".";
+							addLog(t.logs.pick+(ITEM_NAMES[tile] || tile));
+							update();
+							return;
+						}
+						
+						// --- РАСПРЕДЕЛЕНИЕ УРОНА И Т.Д. ---
+						if (stamina <= 0) {
+							addLog(t.logs.stamina);
+							return;
+						}
+						if (tile === "T" || tile === "R"){
+							let cellKey = targetY + "_" + targetX;
+							
+							if (durabilityMap[cellKey] === undefined) {
+								if (tile === "T") durabilityMap[cellKey] = 23;
+								if (tile === "R") durabilityMap[cellKey] = 25;
+								if (tile === "B") durabilityMap[cellKey] = 52;
+							}
+							
+							//durabilityMap[cellKey]--;
+							let damage = 1;
+							if (tile === "T" && equipped === "[") damage = 2;
+							if (tile === "R" && equipped === "/") damage = 2;
+							if (tile === "B" && equipped === "/") damage = 1;
+							if (tile === "T" && equipped === "1") damage = 3;
+							if (tile === "R" && equipped === "2") damage = 3;
+							if (tile === "B" && equipped === "2") damage = 2;
+							if (tile === "T" && equipped === "4") damage = 4;
+							if (tile === "R" && equipped === "5") damage = 4;
+							if (tile === "B" && equipped === "5") damage = 3;
+							durabilityMap[cellKey] -= damage;
+							stamina = Math.max(0, stamina-1);
+							let name = tile === "T" ? "дереву" : "камню";
+							
+							if (durabilityMap[cellKey] > 0) {
+								addLog("* Вы ударили по " +name+ ". Осталось: " +durabilityMap[cellKey]);
+							} else {
+								if (!inventory[tile]) inventory[tile] = 0;
+								inventory[tile]++;
+								
+								map[targetY][targetX] = ".";
+								delete durabilityMap[cellKey];
+								
+								addLog("* Вы добыли " +(tile === "T" ? "дерево" : "камень"));
+							}
+						}
+						else if (tile === "P") {
+							if (!inventory[tile]) inventory[tile] = 0;
+							inventory[tile]++;
+							map[targetY][targetX] = ".";
+							addLog("* Вы взяли картофель");
+						}
+						if (tile === "0") {
+							travelTo("cave");
+							addLog(t.logs.cave1);
+							return;
+						}
+						if (tile === "^") {
+							travelTo("overworld");
+							addLog(t.logs.cave2);
+							return;
+						}
+					}
+				}
+				update();
+			});
+			//update(); //FIRST START
+			addLog();
+		
+		setInterval(() => {
+			gameHour++;
+			
+			if (gameHour >= 24) {
+				gameHour=0;
+				gameDay++;
+			}
+			
+			if (gameHour >= 6 && gameHour < 12) timeOfDay = "Morning";
+			else if (gameHour >= 12 && gameHour < 18) timeOfDay = "Day";
+			else if (gameHour >= 18 && gameHour < 24) timeOfDay = "Evening";
+			else timeOfDay = "Night";
+			
+			update();
+		}, 16000);
+		
+		let stamZero = 0;
+		setInterval(() => {
+			if (!map || map.length === 0) return;
+			
+			if (stepCounter === stamZero) {
+				if (stamina < 100) {
+					stamina = Math.min(100, stamina+1);
+					update();
+				}
+			}
+			stamZero = stepCounter;
+			update();
+		}, 2000);
+		
+		//FOR MONSTERS
+		setInterval(() => {
+			let t = TRANSLATIONS[currentLang];
+			monsters.forEach(m => {
+				let dX = pX - m.x;
+				let dY = pY - m.y;
+				let dist = Math.max(Math.abs(dX),Math.abs(dY));
+				
+				//Attack
+				if (dist === 1) {
+					let damage = 10;
+					if (m.type === "M") damage = 15; //Мертвец бьёт на 15, Голем на 22
+					else if (m.type === "G") damage = 22;
+					else if (m.type === "S") damage = 10;
+					else if (m.type === "g") damage = 45;
+					else if (m.type === "C") damage = 12;
+					hp -= damage;
+					let mName = t.monsters[m.type] || "Monster";
+					addLog("* "+mName+" "+t.logs.attack+". -"+damage+"HP");
+					return;
+				}
+				
+				//Follow
+				if (dist <= 10) {
+					let moveX = dX > 0 ? 1 : (dX < 0 ? -1 : 0);
+					let moveY = dY > 0 ? 1 : (dY < 0 ? -1 : 0);
+					let nextX = m.x + moveX;
+					let nextY = m.y + moveY;
+					if (nextX >= 0 && nextX < MAP_SIZE && nextY >= 0 && nextY < MAP_SIZE) {
+						let t = map[nextY][nextX];
+						if (t === "." || t === "P") {
+							m.x = nextX;
+							m.y = nextY;
+						} else {
+							if (dX !== 0 && (map[m.y][m.x + moveX] === ".")) m.x += moveX;
+							if (dY !== 0 && (map[m.y + moveY][m.x] === ".")) m.y += moveY;
+							
+						}
+					}
+				}
+				
+				//Idle
+				else if (Math.random() < 0.3) {
+					let rX = Math.floor(Math.random() * 3) - 1;
+					let rY = Math.floor(Math.random() * 3) - 1;
+					
+					if (rX !== 0 || rY !== 0) {
+						let nX = m.x + rX;
+						let nY = m.y + rY;
+						if (nX >= 0 && nX < MAP_SIZE && nY >= 0 && nY < MAP_SIZE) {
+							if (map[nY][nX] === ".") {
+								m.x = nX;
+								m.y = nY;
+							}
+						}
+					}
+				}
+			});
+			update();
+		}, 1000);
+		
+		function save() {
+			let saveData = {
+				hp: hp,
+				hunger: hunger,
+				thirst: thirst,
+				stamina: stamina,
+				pX: pX,
+				pY: pY,
+				inventory: inventory,
+				equipped: equipped,
+				gameDay: gameDay,
+				gameHour: gameHour,
+				MAP_SIZE: MAP_SIZE,
+				seed: seed
+			};
+			localStorage.setItem("medromus_save", JSON.stringify(saveData));
+			alert("Игра сохранена!");
+			location.reload();
+		}
+		
+		function load() {
+			let saved = localStorage.getItem("medromus_save");
+			if (!saved) {
+				alert("Сохранений не найдено");
+				return;
+			}
+			let data = JSON.parse(saved);
+			hp = data.hp;
+			hunger = data.hunger;
+			thirst = data.thirst;
+			stamina = data.stamina;
+			pX = data.pX;
+			pY = data.pY;
+			inventory = data.inventory;
+			equipped = data.equipped;
+			gameDay = data.gameDay;
+			gameHour = data.gameHour;
+			MAP_SIZE = data.MAP_SIZE;
+			seed = data.seed;
+			
+			map.length = 0;
+			for (let y = 0; y < MAP_SIZE; y++) {
+				map[y] = [];
+				for (let x = 0; x < MAP_SIZE; x++) {
+					let rand = Math.random();
+					if (rand < 0.02) map[y][x] = "T"; //tree
+					else if (rand < 0.03) map[y][x] = "R"; //rock
+					else if (rand < 0.13) map[y][x] = "≈"; //water
+					else if (rand < 0.11) map[y][x] = "P"; //potato
+					else map[y][x] = ".";
+				}
+			}
+			
+			document.getElementById("main-menu").style.display = "none";
+			document.getElementById("view").style.display = "block";
+			document.getElementById("sidebar").style.display = "flex";
+			update();
+			addLog("* Мир загружен");
+		}
+		updateLang();
+		</script>
+	</body>
 </html>
